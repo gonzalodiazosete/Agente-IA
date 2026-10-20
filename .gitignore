@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .env
-data/
+data/memory.json
+data/memory.local.json
 .vscode/
 .idea/
