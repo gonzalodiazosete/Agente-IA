@@ -1,0 +1,16 @@
+{
+  "assistant_name": "Jarvis",
+  "voice_name": "Puck",
+  "model": "gemini-3.8-live",
+  "audio": {
+    "sample_rate_in": 16000,
+    "sample_rate_out": 24000,
+    "channels": 1,
+    "chunk_size": 1024
+  },
+  "active_plugins": [
+    "pc_control",
+    "obsidian",
+    "weather"
+  ]
+}

@@ -1,0 +1,96 @@
+/* Estilo Oscuro Moderno para Zodi Jarvis */
+
+QMainWindow {
+    background-color: #0f111a;
+    color: #e0e6ed;
+}
+
+QWidget {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    color: #c3ccdb;
+}
+
+QTextEdit, QListWidget {
+    background-color: #16192b;
+    border: 1px solid #282d47;
+    border-radius: 8px;
+    padding: 10px;
+    color: #e0e6ed;
+    selection-background-color: #3b82f6;
+}
+
+QLineEdit {
+    background-color: #1a1e36;
+    border: 1px solid #282d47;
+    border-radius: 20px;
+    padding: 8px 15px;
+    color: #ffffff;
+}
+
+QLineEdit:focus {
+    border: 1px solid #3b82f6;
+}
+
+QPushButton {
+    background-color: #2563eb;
+    color: #ffffff;
+    border: none;
+    border-radius: 18px;
+    padding: 8px 18px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #3b82f6;
+}
+
+QPushButton:pressed {
+    background-color: #1d4ed8;
+}
+
+QPushButton#micButtonMuted {
+    background-color: #374151;
+    color: #9ca3af;
+    border: 1px solid #4b5563;
+}
+
+QPushButton#micButtonActive {
+    background-color: #dc2626;
+    color: #ffffff;
+    border: 1px solid #ef4444;
+}
+
+QLabel#statusLabel {
+    font-weight: bold;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background-color: #1e293b;
+    color: #94a3b8;
+}
+
+QLabel#titleLabel {
+    font-size: 18px;
+    font-weight: bold;
+    color: #60a5fa;
+}
+
+QDialog {
+    background-color: #0f111a;
+}
+
+QGroupBox {
+    border: 1px solid #282d47;
+    border-radius: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    font-weight: bold;
+    color: #60a5fa;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 5px;
+}
