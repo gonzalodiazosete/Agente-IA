@@ -22,17 +22,20 @@ class GeminiLiveClient:
         plugin_manager: PluginManager,
         playback: AudioPlayback,
         model_name: str = "gemini-3.8-live",
-        api_key: Optional[str] = None
+        api_key: Optional[str] = None,
+        audio_queue: Optional[asyncio.Queue] = None
     ):
         self.memory_manager = memory_manager
         self.plugin_manager = plugin_manager
         self.playback = playback
         self.model_name = model_name
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
+        self.audio_queue = audio_queue
 
         self.genai_client: Optional[genai.Client] = None
         self.session: Optional[genai.live.AsyncSession] = None
         self.is_connected = False
+        self.is_processing_tool = False
         self._receive_task: Optional[asyncio.Task] = None
         self._session_cm = None
 
@@ -89,7 +92,9 @@ class GeminiLiveClient:
             self.is_connected = True
             self._set_state("idle")
 
-            # Lanzar tarea de recepción continua en segundo plano
+            # Lanzar tarea de recepción continua en segundo plano.
+            # _listen_loop es la única tarea que escribe/lee la sesión de forma
+            # sostenida; los envíos de audio solo ocurren cuando no hay tool call.
             self._receive_task = asyncio.create_task(self._listen_loop())
             return True
 
@@ -135,6 +140,14 @@ class GeminiLiveClient:
                     tool_call = response.tool_call
                     if tool_call and tool_call.function_calls:
                         self._set_state("thinking")
+                        self.is_processing_tool = True
+                        if self.audio_queue:
+                            while not self.audio_queue.empty():
+                                try:
+                                    self.audio_queue.get_nowait()
+                                    self.audio_queue.task_done()
+                                except:
+                                    pass
                         for fc in tool_call.function_calls:
                             func_name = fc.name
                             func_args = fc.args or {}
@@ -143,18 +156,28 @@ class GeminiLiveClient:
                             self._emit_text("Jarvis", f"*[Ejecutando herramienta: {func_name}...]*")
                             result = await self.plugin_manager.execute_tool_call(func_name, func_args)
 
-                            # Responder a Gemini con el resultado de la función
+                            # Responder a Gemini con el resultado de la función.
+                            # is_processing_tool bloquea send_audio_chunk mientras
+                            # se escribe en la sesión desde este mismo bucle.
                             if self.session:
-                                await self.session.send_tool_response(
-                                    function_responses=[
-                                        types.FunctionResponse(
-                                            name=func_name,
-                                            id=call_id,
-                                            response={"result": result}
-                                        )
-                                    ]
-                                )
-
+                                try:
+                                    self.is_processing_tool = True
+                                    await self.session.send_tool_response(
+                                        function_responses=[
+                                            types.FunctionResponse(
+                                                name=func_name,
+                                                id=call_id,
+                                                response={"result": result}
+                                            )
+                                        ]
+                                    )
+                                finally:
+                                    self.is_processing_tool = False
+                                self._set_state("listening")
+                                await asyncio.sleep(0.2)
+                        self.is_processing_tool = False
+                                
+                                
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -164,11 +187,11 @@ class GeminiLiveClient:
                 self._emit_error(err)
         finally:
             self.is_connected = False
+            self.is_processing_tool = False
             self._set_state("idle")
 
     async def send_audio_chunk(self, pcm_bytes: bytes) -> None:
-        """Envía un fragmento de audio PCM (16kHz 16bit) a Gemini."""
-        if self.session and self.is_connected:
+        if self.session and self.is_connected and not self.is_processing_tool:
             try:
                 await self.session.send_realtime_input(
                     audio=types.Blob(
@@ -179,11 +202,19 @@ class GeminiLiveClient:
             except Exception as e:
                 print(f"[GeminiLiveClient] Error enviando chunk de audio: {e}")
 
-    async def send_text_message(self, text: str) -> None:
-        """Envía un mensaje de texto escrito a Gemini."""
+    async def send_text_message(self, text: str, image_data: bytes = None) -> None:
+        """Envía un mensaje de texto escrito a Gemini, con imagen opcional."""
         if self.session and self.is_connected:
             try:
                 self._set_state("thinking")
+
+                # send_realtime_input solo admite un argumento por llamada,
+                # así que la imagen y el texto se envían consecutivamente.
+                if image_data:
+                    await self.session.send_realtime_input(
+                        media=types.Blob(data=image_data, mime_type="image/jpeg")
+                    )
+
                 await self.session.send_realtime_input(text=text)
             except Exception as e:
                 err = f"Error enviando mensaje de texto: {str(e)}"

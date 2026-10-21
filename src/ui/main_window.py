@@ -1,5 +1,8 @@
 import asyncio
+import base64
+import mimetypes
 import os
+import pypdf
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QLineEdit, QPushButton, QLabel, QFileDialog, QFrame
@@ -14,6 +17,45 @@ from src.audio.playback import AudioPlayback
 from src.core.gemini_live import GeminiLiveClient
 from src.ui.settings_dialog import SettingsDialog
 from src.ui.system_tray import SystemTrayManager
+
+
+# Extensiones que se interpretan siempre como texto plano.
+TEXT_EXTENSIONS = {
+    ".txt", ".md", ".markdown", ".py", ".json", ".csv", ".tsv", ".log",
+    ".xml", ".html", ".htm", ".css", ".js", ".jsx", ".ts", ".tsx",
+    ".yaml", ".yml", ".ini", ".cfg", ".conf", ".toml", ".sql", ".sh",
+    ".bash", ".bat", ".ps1", ".java", ".c", ".h", ".cpp", ".hpp", ".cs",
+    ".go", ".rs", ".rb", ".php", ".swift", ".kt", ".kts", ".r", ".tex",
+    ".env", ".gitignore", ".dockerfile",
+}
+
+# Extensiones de imagen que se envían como adjunto binario a Gemini.
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+
+# Tipos MIME que, sin empezar por "text/", también son texto.
+TEXT_MIME_TYPES = {
+    "application/json",
+    "application/xml",
+    "application/javascript",
+    "application/x-javascript",
+    "application/x-yaml",
+    "application/yaml",
+    "application/x-sh",
+    "application/sql",
+}
+
+
+def is_text_file(file_path: str) -> bool:
+    """Determina si un archivo debe leerse como texto según su extensión/MIME."""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext in TEXT_EXTENSIONS:
+        return True
+
+    mime_type, _ = mimetypes.guess_type(file_path)
+    if mime_type and (mime_type.startswith("text/") or mime_type in TEXT_MIME_TYPES):
+        return True
+
+    return False
 
 
 class UISignals(QObject):
@@ -200,7 +242,52 @@ class MainWindow(QMainWindow):
     def handle_file_selected(self, file_path: str):
         file_name = os.path.basename(file_path)
         self.lbl_attachment.setText(f"📄 Adjunto: {file_name}")
-        self.append_chat_message("Sistema", f"Archivo adjuntado: <b>{file_name}</b> ({file_path})")
+
+        ext = os.path.splitext(file_path)[1].lower()
+        image_data = None
+
+        try:
+            if ext in IMAGE_EXTENSIONS:
+                with open(file_path, "rb") as f:
+                    image_data = f.read()
+                # Se codifica en base64 para incluirlo en el mensaje de texto.
+                content = base64.b64encode(image_data).decode("ascii")
+            elif ext == ".pdf":
+                try:
+                    reader = pypdf.PdfReader(file_path)
+                    content = "\n".join(
+                        (page.extract_text() or "") for page in reader.pages
+                    )
+                except Exception as e:
+                    self.show_error(f"No se pudo leer el PDF {file_name}: {e}")
+                    return
+            elif is_text_file(file_path):
+                with open(file_path, "r", encoding="utf-8-sig", errors="replace") as f:
+                    content = f.read()
+            else:
+                # Archivos sin extensión conocida: intentar decodificar como UTF-8.
+                with open(file_path, "rb") as f:
+                    raw_data = f.read()
+                try:
+                    content = raw_data.decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    self.show_error(f"Tipo de archivo no soportado: {file_name}")
+                    return
+        except OSError as e:
+            self.show_error(f"No se pudo leer el archivo {file_name}: {e}")
+            return
+
+        self.append_chat_message(
+            "Sistema", f"Archivo adjuntado: <b>{file_name}</b> ({file_path})"
+        )
+        self.append_chat_message(
+            self.memory_manager.get_user_name(), f"📎 {file_name}"
+        )
+
+        message = f"[Archivo adjunto: {file_name}]\n\nContenido:\n{content}"
+        asyncio.ensure_future(
+            self.gemini_client.send_text_message(message, image_data=image_data)
+        )
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():

@@ -1,6 +1,8 @@
 import subprocess
 import os
 import ctypes
+import webbrowser
+import urllib.parse
 from typing import Any, Callable, Dict, List
 from src.core.plugin_base import PluginBase
 
@@ -62,6 +64,36 @@ class PCControlPlugin(PluginBase):
         except Exception as e:
             return f"Error ejecutando comando: {str(e)}"
 
+    def open_url(self, url: str) -> str:
+        """
+        Abre una URL en el navegador predeterminado.
+
+        Args:
+            url: Dirección web o URL a abrir (ej: 'https://www.google.com').
+        """
+        try:
+            if not url.startswith(("http://", "https://")):
+                url = f"https://{url}"
+            webbrowser.open(url)
+            return f"URL '{url}' abierta en el navegador."
+        except Exception as e:
+            return f"No se pudo abrir la URL '{url}': {str(e)}"
+
+    def search_google(self, query: str) -> str:
+        """
+        Construye la URL de búsqueda de Google y la abre en el navegador predeterminado.
+
+        Args:
+            query: Texto o consulta a buscar en Google.
+        """
+        try:
+            encoded_query = urllib.parse.quote(query)
+            search_url = f"https://www.google.com/search?q={encoded_query}"
+            webbrowser.open(search_url)
+            return f"Búsqueda de '{query}' abierta en Google."
+        except Exception as e:
+            return f"No se pudo realizar la búsqueda de '{query}': {str(e)}"
+
     def get_tools(self) -> List[Dict[str, Any]]:
         return []
 
@@ -69,5 +101,7 @@ class PCControlPlugin(PluginBase):
         return {
             "open_application": self.open_application,
             "set_volume_mute": self.set_volume_mute,
-            "execute_command": self.execute_command
+            "execute_command": self.execute_command,
+            "open_url": self.open_url,
+            "search_google": self.search_google,
         }

@@ -23,20 +23,6 @@ from src.plugins.mobile.plugin import MobilePlugin
 from src.ui.main_window import MainWindow
 
 
-async def audio_sender_task(audio_queue: asyncio.Queue, gemini_client: GeminiLiveClient):
-    """Tarea asíncrona en segundo plano que envía el audio grabado a Gemini Live."""
-    while True:
-        try:
-            pcm_bytes = await audio_queue.get()
-            if gemini_client.is_connected:
-                await gemini_client.send_audio_chunk(pcm_bytes)
-            audio_queue.task_done()
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            print(f"[AudioSender] Error enviando audio: {e}")
-
-
 async def main():
     # 1. Inicializar componentes del sistema
     memory_manager = MemoryManager("data/memory.json")
@@ -54,11 +40,9 @@ async def main():
     # Inicializar audio
     audio_capture = AudioCapture()
     audio_playback = AudioPlayback()
-    audio_queue = asyncio.Queue()
 
     # Obtener bucle actual de qasync
     loop = asyncio.get_running_loop()
-    audio_capture.set_async_queue(audio_queue, loop)
 
     # Cliente Gemini Live API
     gemini_client = GeminiLiveClient(
@@ -68,12 +52,23 @@ async def main():
         model_name="gemini-3.8-live"
     )
 
+    # El callback de captura corre en el hilo de PortAudio, así que el envío se
+    # agenda en el bucle de asyncio en lugar de usar una tarea intermedia.
+    def on_audio_captured(pcm_bytes: bytes) -> None:
+        if not gemini_client.is_connected or loop.is_closed():
+            return
+        try:
+            asyncio.run_coroutine_threadsafe(
+                gemini_client.send_audio_chunk(pcm_bytes), loop
+            )
+        except RuntimeError:
+            pass  # El bucle se cerró entre la comprobación y el envío
+
+    audio_capture.on_audio_data = on_audio_captured
+
     # Iniciar captura y reproducción de audio en segundo plano
     audio_capture.start()
     audio_playback.start()
-
-    # Lanzar tarea de streaming de audio
-    asyncio.create_task(audio_sender_task(audio_queue, gemini_client))
 
     # Conectar WebSocket con Gemini Live API
     asyncio.create_task(gemini_client.connect())

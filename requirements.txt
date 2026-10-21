@@ -8,4 +8,5 @@ requests>=2.34.0
 spotipy>=2.26.0
 google-api-python-client>=2.201.0
 google-auth-oauthlib>=1.5.0
+pypdf>=6.0.0
 
