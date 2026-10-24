@@ -20,6 +20,7 @@ from src.plugins.memory.plugin import MemoryPlugin
 from src.plugins.spotify.plugin import SpotifyPlugin
 from src.plugins.google_workspace.plugin import GoogleWorkspacePlugin
 from src.plugins.mobile.plugin import MobilePlugin
+from src.plugins.vision.plugin import VisionPlugin
 from src.ui.main_window import MainWindow
 
 
@@ -36,6 +37,7 @@ async def main():
     plugin_manager.register_plugin(SpotifyPlugin())
     plugin_manager.register_plugin(GoogleWorkspacePlugin())
     plugin_manager.register_plugin(MobilePlugin())
+    plugin_manager.register_plugin(VisionPlugin())
 
     # Inicializar audio
     audio_capture = AudioCapture()

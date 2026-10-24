@@ -1,13 +1,12 @@
 import asyncio
-import base64
 import mimetypes
 import os
 import pypdf
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QLineEdit, QPushButton, QLabel, QFileDialog, QFrame
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, QBuffer, QEvent, QIODevice, pyqtSignal, QObject
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 
 from src.core.memory_manager import MemoryManager
@@ -29,7 +28,7 @@ TEXT_EXTENSIONS = {
     ".env", ".gitignore", ".dockerfile",
 }
 
-# Extensiones de imagen que se envían como adjunto binario a Gemini.
+# Extensiones de imagen que se adjuntan a la sesión Live.
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 
 # Tipos MIME que, sin empezar por "text/", también son texto.
@@ -92,6 +91,11 @@ class MainWindow(QMainWindow):
 
         self.init_ui()
         self.system_tray = SystemTrayManager(self, on_toggle_pause=self.on_game_mode_toggle)
+
+        # Capturar Ctrl+V en toda la ventana para poder pegar imágenes.
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
 
     def setup_signals(self):
         self.signals.text_received.connect(self.append_chat_message)
@@ -239,19 +243,101 @@ class MainWindow(QMainWindow):
         if file_path:
             self.handle_file_selected(file_path)
 
+    def attach_image(
+        self,
+        file_name: str,
+        image_bytes: bytes,
+        mime_type: str,
+        source: str = ""
+    ) -> None:
+        """Adjunta una imagen a la sesión Live y la guarda para analyze_image."""
+        vision_plugin = self.plugin_manager.plugins.get("vision")
+        if vision_plugin is None:
+            self.show_error("El plugin de visión no está disponible.")
+            return
+
+        # El plugin reduce la imagen y la reencoda en JPEG (1280 px de lado
+        # máximo). Es la misma versión que se guarda y la que viaja al modelo,
+        # así que solo se procesa una vez.
+        image_bytes, mime_type = vision_plugin.set_last_image(
+            image_bytes, mime_type
+        )
+
+        self.lbl_attachment.setText(f"📄 Adjunto: {file_name}")
+
+        detail = f" ({source})" if source else ""
+        self.append_chat_message(
+            "Sistema", f"Imagen adjuntada: <b>{file_name}</b>{detail}"
+        )
+        self.append_chat_message(
+            self.memory_manager.get_user_name(), f"📎 {file_name}"
+        )
+        # La imagen va en el mismo mensaje que el aviso: el modelo la ve al
+        # instante, sin una segunda llamada a la API ni un segundo modelo.
+        asyncio.ensure_future(
+            self.gemini_client.send_text_message(
+                f"[Imagen adjunta: {file_name}{detail}]\n"
+                "La imagen viaja en este mismo mensaje. Mírala y describe o "
+                "responde lo que corresponda. No hace falta llamar a "
+                "analyze_image salvo que necesites una segunda lectura.",
+                image_data=image_bytes,
+                mime_type=mime_type,
+            )
+        )
+
+    def eventFilter(self, obj, event):
+        if (
+            event.type() == QEvent.Type.KeyPress
+            and event.key() == Qt.Key.Key_V
+            and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            and self.isActiveWindow()
+        ):
+            if self.paste_clipboard_image():
+                return True
+        return super().eventFilter(obj, event)
+
+    def paste_clipboard_image(self) -> bool:
+        """Pega una imagen del portapapeles si la hay. Devuelve True si la consumió."""
+        image = QApplication.clipboard().image()
+        if image.isNull():
+            return False
+
+        buffer = QBuffer()
+        if not buffer.open(QIODevice.OpenModeFlag.WriteOnly):
+            return False
+
+        try:
+            if not image.save(buffer, "PNG"):
+                return False
+            image_bytes = bytes(buffer.data())
+        finally:
+            buffer.close()
+
+        self.attach_image(
+            "imagen_portapapeles.png",
+            image_bytes,
+            "image/png",
+            "pegada desde el portapapeles",
+        )
+        return True
+
     def handle_file_selected(self, file_path: str):
         file_name = os.path.basename(file_path)
         self.lbl_attachment.setText(f"📄 Adjunto: {file_name}")
 
         ext = os.path.splitext(file_path)[1].lower()
         image_data = None
+        image_mime_type = None
 
         try:
             if ext in IMAGE_EXTENSIONS:
+                # La imagen se adjunta a la sesión Live en el mismo mensaje,
+                # así que el modelo la ve sin llamar a ninguna herramienta.
                 with open(file_path, "rb") as f:
                     image_data = f.read()
-                # Se codifica en base64 para incluirlo en el mensaje de texto.
-                content = base64.b64encode(image_data).decode("ascii")
+                image_mime_type = (
+                    mimetypes.guess_type(file_path)[0] or "image/jpeg"
+                )
             elif ext == ".pdf":
                 try:
                     reader = pypdf.PdfReader(file_path)
@@ -277,6 +363,10 @@ class MainWindow(QMainWindow):
             self.show_error(f"No se pudo leer el archivo {file_name}: {e}")
             return
 
+        if image_data is not None:
+            self.attach_image(file_name, image_data, image_mime_type, file_path)
+            return
+
         self.append_chat_message(
             "Sistema", f"Archivo adjuntado: <b>{file_name}</b> ({file_path})"
         )
@@ -286,7 +376,7 @@ class MainWindow(QMainWindow):
 
         message = f"[Archivo adjunto: {file_name}]\n\nContenido:\n{content}"
         asyncio.ensure_future(
-            self.gemini_client.send_text_message(message, image_data=image_data)
+            self.gemini_client.send_text_message(message)
         )
 
     def dragEnterEvent(self, event: QDragEnterEvent):

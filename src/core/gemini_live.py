@@ -202,20 +202,41 @@ class GeminiLiveClient:
             except Exception as e:
                 print(f"[GeminiLiveClient] Error enviando chunk de audio: {e}")
 
-    async def send_text_message(self, text: str, image_data: bytes = None) -> None:
-        """Envía un mensaje de texto escrito a Gemini, con imagen opcional."""
+    async def send_text_message(
+        self,
+        text: str,
+        image_data: bytes = None,
+        mime_type: str = "image/jpeg",
+    ) -> None:
+        """
+        Envía un mensaje de texto escrito a Gemini, con imagen opcional.
+
+        Cuando hay imagen se manda imagen y texto en un único turno
+        (`send_client_content`). Así el modelo tiene las dos cosas antes de
+        generar y responde en una sola vuelta: con dos envíos separados puede
+        contestar al texto primero, a ciegas, y volver a contestar al ver la
+        imagen.
+        """
         if self.session and self.is_connected:
             try:
                 self._set_state("thinking")
 
-                # send_realtime_input solo admite un argumento por llamada,
-                # así que la imagen y el texto se envían consecutivamente.
                 if image_data:
-                    await self.session.send_realtime_input(
-                        media=types.Blob(data=image_data, mime_type="image/jpeg")
+                    await self.session.send_client_content(
+                        turns=types.Content(
+                            role="user",
+                            parts=[
+                                types.Part.from_bytes(
+                                    data=image_data,
+                                    mime_type=mime_type or "image/jpeg",
+                                ),
+                                types.Part.from_text(text=text),
+                            ],
+                        ),
+                        turn_complete=True,
                     )
-
-                await self.session.send_realtime_input(text=text)
+                else:
+                    await self.session.send_realtime_input(text=text)
             except Exception as e:
                 err = f"Error enviando mensaje de texto: {str(e)}"
                 self._emit_error(err)

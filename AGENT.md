@@ -26,6 +26,7 @@ Zodi/
 │   │   ├── memory/              # Guardar y consultar recuerdos y tareas
 │   │   ├── spotify/             # Control de Spotify Web API
 │   │   ├── google_workspace/    # Gmail & Google Calendar API
+│   │   ├── vision/              # Imágenes adjuntas (sesión Live + analyze_image)
 │   │   └── mobile/              # Notificaciones push y control Android (ntfy / Tasker / ADB)
 │   └── ui/
 │       ├── main_window.py       # Ventana principal PyQt6 (Chat, Mic Toggle, Drag&Drop)
@@ -59,6 +60,19 @@ Zodi/
 - `spotify`: Reproducir, pausar, cambiar canciones e identificar temas sonando mediante Spotipy.
 - `google_workspace`: Consultar correos de Gmail y consultar/crear eventos en Google Calendar.
 - `mobile`: Enviar notificaciones instantáneas al móvil vía ntfy.sh (app gratuita para Android), webhook a Tasker o comandos ADB directos.
+- `vision`: Adjuntar imágenes a la conversación.
+
+### 4. Visión (`src/plugins/vision/`)
+La imagen adjuntada se reduce a 1280 px de lado máximo y se reencoda en JPEG
+(calidad 85) antes de salir del plugin: una captura de 12 MB llega a la API
+como ~600 KB. Después viaja **dentro de la misma sesión Live**, en el mismo
+turno que el aviso, así que el modelo la ve y responde en una sola vuelta, sin
+un segundo cliente ni un segundo modelo. La herramienta `analyze_image` queda
+como segunda lectura y usa un cliente reutilizado con `api_version="v1beta"` y
+timeout explícito, una cadena de modelos con descanso por cuota/errores y una
+caché de la última respuesta. Modelo por defecto: `gemini-3.1-flash-lite`
+(medido; `gemini-3.8-flash` devuelve 504 a los ~28 s con esta clave), se puede
+cambiar con la variable `VISION_MODEL`.
 
 ---
 

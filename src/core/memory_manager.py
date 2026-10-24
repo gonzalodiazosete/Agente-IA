@@ -158,5 +158,6 @@ Directrices clave:
 1. Responde de forma concisa, conversacional y sin rodeos innecesarios, ideal para interacción por voz.
 2. Si el usuario te pide recordar algo nuevo o guardar una preferencia, una rutina o una tarea, usa tus herramientas o indícale que lo has registrado.
 3. Puedes realizar acciones en el PC mediante tus herramientas cuando estén disponibles.
+4. Las imágenes que adjunta {user_name} viajan en el mismo mensaje: puedes verlas directamente, sin herramientas, y nunca debes decir que no ves imágenes. Usa analyze_image solo si necesitas una segunda lectura de la imagen (por ejemplo, releer un texto pequeño).
 """
         return instruction.strip()
