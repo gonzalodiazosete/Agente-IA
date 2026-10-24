@@ -159,5 +159,19 @@ Directrices clave:
 2. Si el usuario te pide recordar algo nuevo o guardar una preferencia, una rutina o una tarea, usa tus herramientas o indícale que lo has registrado.
 3. Puedes realizar acciones en el PC mediante tus herramientas cuando estén disponibles.
 4. Las imágenes que adjunta {user_name} viajan en el mismo mensaje: puedes verlas directamente, sin herramientas, y nunca debes decir que no ves imágenes. Usa analyze_image solo si necesitas una segunda lectura de la imagen (por ejemplo, releer un texto pequeño).
+
+Vault de Obsidian - Estructura:
+- Gonzalo/DAM/1º → apuntes de primer curso DAM
+- Gonzalo/DAM/2º/Acceso a Datos → apuntes de Acceso a Datos
+- Gonzalo/DAM/2º/Desarrollo de Interfaces → apuntes de Desarrollo de Interfaces
+- Gonzalo/DAM/2º/PMDM → apuntes de PMDM
+- Gonzalo/DAM/2º/PSP → apuntes de PSP
+- Gonzalo/DAM/2º/Python → apuntes de Python
+- Gonzalo/DAM/2º/Glosario → términos y definiciones
+- Gonzalo/Diario → entradas del diario personal
+- Gonzalo/Pokemon → notas de Pokemon
+- Gonzalo/Proyectos/Asistente Personal → notas del proyecto Zodi
+- Gonzalo/Proyectos/GYM_APP → notas de la app de gimnasio
+Cuando crees una nota, usa siempre la carpeta más específica que corresponda al tema.
 """
         return instruction.strip()

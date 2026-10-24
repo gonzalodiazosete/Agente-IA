@@ -20,12 +20,12 @@ class ObsidianPlugin(PluginBase):
 
     def create_note(self, title: str, content: str, folder: str = "") -> str:
         """
-        Crea una nueva nota en el Vault de Obsidian.
+        Crea una nueva nota Markdown en el Vault de Obsidian.
 
         Args:
-            title: Título de la nota (sin extensión .md).
-            content: Contenido en formato Markdown.
-            folder: Carpeta relativa dentro del vault (opcional).
+            title: Título de la nota, sin la extensión .md.
+            content: Contenido de la nota en formato Markdown.
+            folder: Carpeta relativa dentro del vault (dejar vacío para la raíz).
         """
         if not self.vault_path or not os.path.exists(self.vault_path):
             return "Error: La ruta del Vault de Obsidian no está configurada o no existe."
@@ -50,7 +50,7 @@ class ObsidianPlugin(PluginBase):
         Lee el contenido de una nota de Obsidian por su nombre.
 
         Args:
-            title: Título o nombre del archivo de la nota.
+            title: Título o nombre del archivo de la nota a leer.
         """
         if not self.vault_path or not os.path.exists(self.vault_path):
             return "Error: La ruta del Vault de Obsidian no está configurada."
@@ -74,7 +74,7 @@ class ObsidianPlugin(PluginBase):
         Busca notas en el vault que contengan una palabra o frase clave.
 
         Args:
-            query: Texto a buscar.
+            query: Texto o palabra clave a buscar en las notas.
         """
         if not self.vault_path or not os.path.exists(self.vault_path):
             return "Error: La ruta del Vault de Obsidian no está configurada."
@@ -101,7 +101,7 @@ class ObsidianPlugin(PluginBase):
 
     def get_executors(self) -> Dict[str, Callable[..., Any]]:
         return {
-            "create_obsidian_note": self.create_note,
-            "read_obsidian_note": self.read_note,
-            "search_obsidian_notes": self.search_notes
+            "create_note": self.create_note,
+            "read_note": self.read_note,
+            "search_notes": self.search_notes,
         }
