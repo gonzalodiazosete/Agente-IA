@@ -45,7 +45,7 @@ Zodi/
 
 ### 1. Núcleo (`src/core/`)
 - **`MemoryManager`**: Mantiene la memoria del usuario estructurada en `data/memory.json` (perfil, fitness/gimnasio, tareas pendientes, notas contextuales y preferencias). Inyecta contexto dinámicamente en el prompt del sistema.
-- **`GeminiLiveClient`**: Gestiona la sesión WebSocket continua con `google-genai`, recibe fragmentos de audio PCM 24kHz y maneja el *Tool Calling* asíncrono.
+- **`GeminiLiveClient`**: Gestiona la sesión WebSocket continua con `google-genai`, recibe fragmentos de audio PCM 24kHz y maneja el *Tool Calling* asíncrono. El barge-in lo dispara el VAD automático del servidor al recibir voz del micrófono; al llegar `server_content.interrupted`, el cliente vacía el buffer de reproducción para que el modelo deje de sonar de inmediato.
 - **`PluginManager`**: Registra las herramientas expuestas por cada plugin y las ejecuta cuando Gemini envía llamadas a funciones.
 
 ### 2. Audio (`src/audio/`)

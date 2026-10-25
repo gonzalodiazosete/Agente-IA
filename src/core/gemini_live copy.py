@@ -53,49 +53,56 @@ class GeminiLiveClient:
             self.on_error(error)
 
     async def connect(self) -> bool:
-        """Establece la conexión WebSocket con la Live API de Gemini."""
-        if not self.api_key:
-            self._emit_error("No se encontró la clave de API (GEMINI_API_KEY). Configúrala en el archivo .env")
-            return False
+    """Establece la conexión WebSocket con la Live API de Gemini."""
+    if not self.api_key:
+        self._emit_error("No se encontró la clave de API (GEMINI_API_KEY). Configúrala en el archivo .env")
+        return False
 
-        try:
-            self.genai_client = genai.Client(api_key=self.api_key)
-            voice_name = self.memory_manager.get_voice_name()
-            system_instruction = self.memory_manager.build_system_instruction()
-            tools = self.plugin_manager.get_gemini_tools()
+    try:
+        self.genai_client = genai.Client(api_key=self.api_key)
+        voice_name = self.memory_manager.get_voice_name()
+        system_instruction = self.memory_manager.build_system_instruction()
+        tools = self.plugin_manager.get_gemini_tools()
 
-            config = types.LiveConnectConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    voice_config=types.VoiceConfig(
-                        prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_name)
-                    )
-                ),
-                system_instruction=types.Content(
-                    parts=[types.Part.from_text(text=system_instruction)]
-                ),
-                tools=tools if tools else None
+        config = types.LiveConnectConfig(
+            response_modalities=["AUDIO"],
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_name)
+                )
+            ),
+            system_instruction=types.Content(
+                parts=[types.Part.from_text(text=system_instruction)]
+            ),
+            tools=tools if tools else None,
+            realtime_input_config=types.RealtimeInputConfig(
+                voice_activity_detection=types.VoiceActivityDetection(
+                    disabled=False,
+                    start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_LOW,
+                    end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
+                    prefix_padding_ms=300,
+                    silence_duration_ms=800,
+                )
             )
+        )
 
-            # Iniciar conexión WebSocket streaming
-            session_cm = self.genai_client.aio.live.connect(
-                model=self.model_name,
-                config=config
-            )
-            self.session = await session_cm.__aenter__()
-            self.is_connected = True
-            self._set_state("idle")
+        self._session_cm = self.genai_client.aio.live.connect(
+            model=self.model_name,
+            config=config
+        )
+        self.session = await self._session_cm.__aenter__()
+        self.is_connected = True
+        self._set_state("idle")
 
-            # Lanzar tarea de recepción continua en segundo plano
-            self._receive_task = asyncio.create_task(self._listen_loop())
-            return True
+        self._receive_task = asyncio.create_task(self._listen_loop())
+        return True
 
-        except Exception as e:
-            err = f"Error conectando a Gemini Live API: {str(e)}"
-            self._emit_error(err)
-            print(f"[GeminiLiveClient] {err}\n{traceback.format_exc()}")
-            self.is_connected = False
-            return False
+    except Exception as e:
+        err = f"Error conectando a Gemini Live API: {str(e)}"
+        self._emit_error(err)
+        print(f"[GeminiLiveClient] {err}\n{traceback.format_exc()}")
+        self.is_connected = False
+        return False
 
     async def _listen_loop(self) -> None:
         """Bucle que escucha de forma continua las respuestas recibidas de Gemini."""

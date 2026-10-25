@@ -78,7 +78,25 @@ class GeminiLiveClient:
                 system_instruction=types.Content(
                     parts=[types.Part.from_text(text=system_instruction)]
                 ),
-                tools=tools if tools else None
+                tools=tools if tools else None,
+                realtime_input_config=types.RealtimeInputConfig(
+                    # Con VAD automático, el propio audio del micrófono es la
+                    # señal de barge-in: en cuanto el servidor detecta voz
+                    # mientras el modelo habla, cancela el turno en curso.
+                    # Este es el valor por defecto, pero se deja explícito
+                    # para que el comportamiento no dependa del default.
+                    activity_handling=types.ActivityHandling.START_OF_ACTIVITY_INTERRUPTS,
+                    automatic_activity_detection=types.AutomaticActivityDetection(
+                        disabled=False,
+                        # Detectar el inicio del habla con normalidad...
+                        start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
+                        # ...pero tardar más en considerar que el turno terminó.
+                        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
+                        prefix_padding_ms=300,
+                        # Silencio necesario antes de cerrar el turno (por defecto ~500 ms).
+                        silence_duration_ms=1500,
+                    )
+                ),
             )
 
             # Iniciar conexión WebSocket streaming.
@@ -116,6 +134,18 @@ class GeminiLiveClient:
                 async for response in self.session.receive():
                     server_content = response.server_content
                     if server_content:
+                        # Barge-in: el usuario empezó a hablar mientras el
+                        # modelo respondía y el servidor canceló el turno.
+                        # Hay que vaciar YA el audio que el cliente tenga
+                        # encolado; si no, el modelo sigue sonando hasta
+                        # agotar el buffer aunque el servidor haya dejado de
+                        # generar. Se descarta el resto del mensaje porque
+                        # puede contener audio residual del turno cancelado.
+                        if server_content.interrupted:
+                            self.playback.clear()
+                            self._set_state("listening")
+                            continue
+
                         model_turn = server_content.model_turn
                         if model_turn and model_turn.parts:
                             for part in model_turn.parts:
